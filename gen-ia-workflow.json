@@ -1,0 +1,153 @@
+{
+  "name": "Genotyping to Therapy Report",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "none",
+        "httpMethod": "POST",
+        "path": "gen-ia-report",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": 1,
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": 2,
+      "name": "PDF Parse",
+      "type": "n8n-nodes-base.pdfExtract",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const text = $node['PDF Parse'].json[0].text;\nconst matchAge = text.match(/Idade:(\\d+)/i);\nconst age = matchAge ? parseInt(matchAge[1], 10) : null;\nreturn [{ json: { raw: text, age } }];"
+      },
+      "id": 3,
+      "name": "Extract Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const { raw, age } = items[0].json;\nconst prompt = `Com base no protocolo GEN-IA, gere um relatorio terapeutico.\nMutacoes: ${raw}.\nIdade: ${age}.`;\nreturn [{ json: { prompt } }];"
+      },
+      "id": 4,
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "chat",
+        "model": "gpt-4o",
+        "prompt": "={{$node['Build Prompt'].json[0].prompt}}"
+      },
+      "id": 5,
+      "name": "OpenAI",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const text = $node['OpenAI'].json[0].text;\n// Simple checks\nif (!text.includes('posologia')) {\n  throw new Error('Posologia incompleta');\n}\nreturn items;"
+      },
+      "id": 6,
+      "name": "Validador de Consist\u00eancia",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "subject": "Relat\u00f3rio Terap\u00eatico",
+        "text": "={{$node['OpenAI'].json[0].text}}",
+        "toEmail": "={{$node[\"Webhook\"].json[\"query\"].email}}"
+      },
+      "id": 7,
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1300, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "PDF Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF Parse": {
+      "main": [
+        [
+          {
+            "node": "Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Validador de Consist\u00eancia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validador de Consist\u00eancia": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
